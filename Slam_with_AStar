@@ -1,0 +1,236 @@
+#include <Servo.h>             // Servo library for controlling servos
+#include <NewPing.h>           // Library for ultrasonic sensor
+#include <Wire.h>              // I2C library for IMU communication
+#include <Adafruit_MPU6050.h>  // Adafruit MPU6050 library
+#include <Adafruit_Sensor.h>   // Unified sensor library
+#include <QueueArray.h>        // Queue library for A* pathfinding
+
+// Pin Definitions
+#define TRIG_PIN 9             // Ultrasonic sensor TRIG pin
+#define ECHO_PIN 7             // Ultrasonic sensor ECHO pin
+#define SERVO_PIN 13           // Servo controlling ultrasonic sensor
+#define IMU_INT_PIN 2          // IMU interrupt pin (optional, if needed)
+
+// Motor Control Pins (DRV8833)
+#define MOTOR_AIN1 46
+#define MOTOR_AIN2 47
+#define MOTOR_BIN1 50
+#define MOTOR_BIN2 49
+#define MOTOR_SLP 48
+
+// A* Constants
+#define GRID_SIZE 10           // Size of the grid for pathfinding
+#define OBSTACLE_THRESHOLD 15  // Distance in cm considered an obstacle
+#define INF 9999               // Used for large costs in A*
+
+// Global Variables
+Servo ultrasonicServo;          // Servo for scanning
+NewPing sonar(TRIG_PIN, ECHO_PIN, 200);  // Ultrasonic sensor with a max distance of 200cm
+Adafruit_MPU6050 mpu;           // IMU sensor
+int occupancyGrid[GRID_SIZE][GRID_SIZE];  // Grid for SLAM
+
+int currentX = 0;  // Current X position on the grid
+int currentY = 0;  // Current Y position on the grid
+
+// Struct for A* nodes
+struct Node {
+  int x, y;
+  int gCost, hCost, fCost;
+  Node* parent;
+};
+
+// Function to initialize components
+void initializeComponents() {
+  Serial.begin(9600);
+  
+  // Initialize Motors
+  pinMode(MOTOR_AIN1, OUTPUT);
+  pinMode(MOTOR_AIN2, OUTPUT);
+  pinMode(MOTOR_BIN1, OUTPUT);
+  pinMode(MOTOR_BIN2, OUTPUT);
+  pinMode(MOTOR_SLP, OUTPUT);
+  digitalWrite(MOTOR_SLP, HIGH);  // Enable motor driver
+
+  // Initialize Servo
+  ultrasonicServo.attach(SERVO_PIN);
+  ultrasonicServo.write(90);  // Start in the middle position
+  
+  // Initialize IMU
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) {
+      delay(10);
+    }
+  }
+  
+  // Initialize occupancy grid
+  initializeOccupancyGrid();
+}
+
+// Function to initialize the occupancy grid
+void initializeOccupancyGrid() {
+  for (int i = 0; i < GRID_SIZE; i++) {
+    for (int j = 0; j < GRID_SIZE; j++) {
+      occupancyGrid[i][j] = 0;  // Start with all cells empty
+    }
+  }
+}
+
+// Function to perform a scan with the ultrasonic sensor
+void scanEnvironment() {
+  for (int angle = 0; angle <= 180; angle += 30) {
+    ultrasonicServo.write(angle);
+    delay(500);  // Wait for the servo to move to position
+    int distance = sonar.ping_cm();
+    updateOccupancyGrid(angle, distance);
+  }
+  ultrasonicServo.write(90);  // Return to center
+}
+
+// Function to update the occupancy grid based on the sensor data
+void updateOccupancyGrid(int angle, int distance) {
+  if (distance > 0 && distance < OBSTACLE_THRESHOLD) {
+    int x = currentX + distance * cos(radians(angle));
+    int y = currentY + distance * sin(radians(angle));
+    
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+      occupancyGrid[x][y] = 1;  // Mark the cell as an obstacle
+    }
+  }
+}
+
+// Function to calculate the heuristic for A* (Manhattan distance)
+int calculateHeuristic(int x1, int y1, int x2, int y2) {
+  return abs(x1 - x2) + abs(y1 - y2);
+}
+
+// Function to find the path using A* algorithm
+QueueArray<Node*> aStarPathfinding(int startX, int startY, int goalX, int goalY) {
+  QueueArray<Node*> openSet;   // Open set for nodes to be evaluated
+  bool closedSet[GRID_SIZE][GRID_SIZE] = {false};  // Closed set for nodes already evaluated
+
+  Node* startNode = new Node();
+  startNode->x = startX;
+  startNode->y = startY;
+  startNode->gCost = 0;
+  startNode->hCost = calculateHeuristic(startX, startY, goalX, goalY);
+  startNode->fCost = startNode->gCost + startNode->hCost;
+  startNode->parent = nullptr;
+  
+  openSet.enqueue(startNode);
+
+  while (!openSet.isEmpty()) {
+    // Get the node with the lowest fCost
+    Node* currentNode = openSet.dequeue();
+    
+    // If the goal is reached, return the path
+    if (currentNode->x == goalX && currentNode->y == goalY) {
+      QueueArray<Node*> path;
+      while (currentNode != nullptr) {
+        path.enqueue(currentNode);
+        currentNode = currentNode->parent;
+      }
+      return path;
+    }
+    
+    // Add current node to closed set
+    closedSet[currentNode->x][currentNode->y] = true;
+
+    // Check neighboring nodes
+    for (int i = -1; i <= 1; i++) {
+      for (int j = -1; j <= 1; j++) {
+        if (i == 0 && j == 0) continue;  // Skip the current node
+        int neighborX = currentNode->x + i;
+        int neighborY = currentNode->y + j;
+        
+        // Skip out of bounds and obstacles
+        if (neighborX < 0 || neighborX >= GRID_SIZE || neighborY < 0 || neighborY >= GRID_SIZE || occupancyGrid[neighborX][neighborY] == 1 || closedSet[neighborX][neighborY]) {
+          continue;
+        }
+
+        Node* neighborNode = new Node();
+        neighborNode->x = neighborX;
+        neighborNode->y = neighborY;
+        neighborNode->gCost = currentNode->gCost + 1;
+        neighborNode->hCost = calculateHeuristic(neighborX, neighborY, goalX, goalY);
+        neighborNode->fCost = neighborNode->gCost + neighborNode->hCost;
+        neighborNode->parent = currentNode;
+        
+        // Check if this node is already in the open set
+        bool isInOpenSet = false;
+        for (int k = 0; k < openSet.count(); k++) {
+          Node* openNode = openSet.peek();  // Corrected usage of peek
+          if (openNode->x == neighborX && openNode->y == neighborY && openNode->fCost <= neighborNode->fCost) {
+            isInOpenSet = true;
+            break;
+          }
+        }
+        
+        if (!isInOpenSet) {
+          openSet.enqueue(neighborNode);
+        }
+      }
+    }
+  }
+  
+  // Return an empty path if no path is found
+  return QueueArray<Node*>();
+}
+
+// Function to follow the path calculated by A*
+void followPath(QueueArray<Node*> path) {
+  while (!path.isEmpty()) {
+    Node* nextNode = path.dequeue();
+    moveTo(nextNode->x, nextNode->y);
+  }
+  stopMovement();
+}
+
+// Function to move to a specific grid location
+void moveTo(int targetX, int targetY) {
+  // This function should implement movement to the specific grid cell
+  // For simplicity, we'll just move forward for now
+  moveForward();
+  delay(1000);  // Move forward for a second
+  stopMovement();
+}
+
+// Placeholder function for motor control
+void moveForward() {
+  digitalWrite(MOTOR_AIN1, HIGH);
+  digitalWrite(MOTOR_AIN2, LOW);
+  digitalWrite(MOTOR_BIN1, HIGH);
+  digitalWrite(MOTOR_BIN2, LOW);
+}
+
+void stopMovement() {
+  digitalWrite(MOTOR_AIN1, LOW);
+  digitalWrite(MOTOR_AIN2, LOW);
+  digitalWrite(MOTOR_BIN1, LOW);
+  digitalWrite(MOTOR_BIN2, LOW);
+}
+
+// Setup function
+void setup() {
+  initializeComponents();
+}
+
+// Main loop function
+void loop() {
+  // Perform a scan and update the occupancy grid
+  scanEnvironment();
+  
+  // Define your goal
+  int goalX = GRID_SIZE - 1;
+  int goalY = GRID_SIZE - 1;
+  
+  // Calculate the path using A*
+  QueueArray<Node*> path = aStarPathfinding(currentX, currentY, goalX, goalY);
+  
+  // Follow the calculated path
+  followPath(path);
+  
+  // Add a delay to simulate time between actions
+  delay(1000);
+}
+
