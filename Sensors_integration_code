@@ -1,0 +1,99 @@
+#include <Wire.h>
+#include <MPU6050.h>
+
+// IMU (MPU-6050)
+MPU6050 mpu;
+
+// Ultrasonic Sensor
+const int trigPin = 9;
+const int echoPin = 7;
+
+// Motor Control Pins
+const int motorAin1 = 46;
+const int motorAin2 = 47;
+const int motorBin1 = 50;
+const int motorBin2 = 49;
+const int motorSLP  = 48;
+
+void setup() {
+  // Motor Pins Setup
+  pinMode(motorAin1, OUTPUT);
+  pinMode(motorAin2, OUTPUT);
+  pinMode(motorBin1, OUTPUT);
+  pinMode(motorBin2, OUTPUT);
+  pinMode(motorSLP, OUTPUT);
+  
+  // Enable the motor driver
+  digitalWrite(motorSLP, HIGH);
+
+  // IMU Setup
+  Wire.begin();
+  mpu.initialize();
+  
+  if (!mpu.testConnection()) {
+    Serial.println("MPU6050 connection failed");
+    while(1);
+  }
+
+  // Ultrasonic Sensor Setup
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Read IMU data
+  int16_t ax, ay, az;
+  int16_t gx, gy, gz;
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+  
+  // Calculate the distance using the ultrasonic sensor
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH);
+  float distance = duration * 0.034 / 2;
+  
+  // Control the robot's movement based on sensor data
+  if (distance < 20) {
+    // Stop if an obstacle is detected
+    stopMotors();
+  } else {
+    // Move forward if no obstacle
+    moveForward();
+  }
+
+  // Print IMU and distance data to Serial Monitor for debugging
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.print(" cm\t");
+  Serial.print("IMU a/g (g, °/s): ");
+  Serial.print(ax/16384.0); Serial.print(" ");
+  Serial.print(ay/16384.0); Serial.print(" ");
+  Serial.print(az/16384.0); Serial.print(" ");
+  Serial.print(gx/131.0); Serial.print(" ");
+  Serial.print(gy/131.0); Serial.print(" ");
+  Serial.println(gz/131.0);
+  
+  delay(100);
+}
+
+void moveForward() {
+  digitalWrite(motorAin1, HIGH);
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, HIGH);
+  digitalWrite(motorBin2, LOW);
+}
+
+void stopMotors() {
+  digitalWrite(motorAin1, LOW);
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, LOW);
+  digitalWrite(motorBin2, LOW);
+}
+
+
+ 
