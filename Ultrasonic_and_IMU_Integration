@@ -1,0 +1,72 @@
+#include <Wire.h>
+#include <Servo.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <NewPing.h>
+
+Servo ultrasonicServo;  // Servo for ultrasonic sensor
+Servo pendulumServo;    // Servo for balancing the pendulum
+
+Adafruit_MPU6050 mpu;
+
+#define TRIG_PIN 24
+#define ECHO_PIN 25
+#define MAX_DISTANCE 200  // Maximum distance for ultrasonic sensor in cm
+NewPing sonar(TRIG_PIN, ECHO_PIN, MAX_DISTANCE);
+
+void setup() {
+  Serial.begin(115200);
+
+  // Setup MPU6050
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) {
+      delay(10);
+    }
+  }
+  mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
+  mpu.setGyroRange(MPU6050_RANGE_250_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+  // Setup servos
+  ultrasonicServo.attach(13);  // Pin 13 for ultrasonic servo
+  pendulumServo.attach(12);    // Pin 12 for pendulum servo
+}
+
+void loop() {
+  // Ultrasonic sensor operation
+  unsigned int distance = sonar.ping_cm();
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+
+  // IMU operation
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+  Serial.print("IMU a/g (g, °/s): ");
+  Serial.print(a.acceleration.x);
+  Serial.print(" ");
+  Serial.print(a.acceleration.y);
+  Serial.print(" ");
+  Serial.print(a.acceleration.z);
+  Serial.print(" ");
+  Serial.print(g.gyro.x);
+  Serial.print(" ");
+  Serial.print(g.gyro.y);
+  Serial.print(" ");
+  Serial.print(g.gyro.z);
+  Serial.println();
+
+  // Control the pendulum servo based on IMU data
+  if (a.acceleration.x > 0.1) {
+    pendulumServo.write(180);
+  } else if (a.acceleration.x < -0.1) {
+    pendulumServo.write(0);
+  } else {
+    pendulumServo.write(90);  // Center position
+  }
+
+  delay(100);
+}
+
+ 
