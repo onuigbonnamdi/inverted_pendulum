@@ -1,0 +1,217 @@
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <NewPing.h>
+#include <Servo.h>
+
+// IMU setup
+Adafruit_MPU6050 mpu;
+
+// Ultrasonic setup
+#define TRIG_PIN 24
+#define ECHO_PIN 25
+NewPing sonar(TRIG_PIN, ECHO_PIN);
+
+// Occupancy grid parameters
+#define GRID_SIZE 10
+#define CELL_SIZE 10  // Size of each cell in cm
+int occupancyGrid[GRID_SIZE][GRID_SIZE]; // 0: free, 1: occupied
+
+// Servo setup
+Servo ultrasonicServo;
+Servo pendulumServo;
+#define ULTRASONIC_SERVO_PIN 13
+#define PENDULUM_SERVO_PIN 12
+
+// Node structure for A* pathfinding
+struct Node {
+  int x, y;
+  int gCost, hCost, fCost;
+  Node* parent;
+};
+
+void initializeOccupancyGrid() {
+  for (int i = 0; i < GRID_SIZE; i++) {
+    for (int j = 0; j < GRID_SIZE; j++) {
+      occupancyGrid[i][j] = 0; // Set all cells to free
+    }
+  }
+  // Manually set some obstacles for testing
+  occupancyGrid[2][5] = 1;
+  occupancyGrid[4][4] = 1;
+  occupancyGrid[5][3] = 1;
+}
+
+void updateOccupancyGrid(int x, int y, int distance) {
+  int gridX = x / CELL_SIZE;
+  int gridY = y / CELL_SIZE;
+
+  if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
+    if (distance < CELL_SIZE) {
+      occupancyGrid[gridX][gridY] = 1;  // Mark as occupied
+    } else {
+      occupancyGrid[gridX][gridY] = 0;  // Mark as free
+    }
+  }
+}
+
+int calculateHCost(Node* a, Node* b) {
+  return abs(a->x - b->x) + abs(a->y - b->y);
+}
+
+void aStar(Node start, Node goal) {
+  Node* openList[GRID_SIZE * GRID_SIZE];
+  bool closedList[GRID_SIZE][GRID_SIZE] = { false };
+
+  int openListSize = 0;
+  start.gCost = 0;
+  start.hCost = calculateHCost(&start, &goal);
+  start.fCost = start.gCost + start.hCost;
+  openList[openListSize++] = &start;
+
+  Serial.println("Starting A* Algorithm...");
+
+  while (openListSize > 0) {
+    Node* currentNode = openList[0];
+    int currentIdx = 0;
+    for (int i = 1; i < openListSize; i++) {
+      if (openList[i]->fCost < currentNode->fCost ||
+          (openList[i]->fCost == currentNode->fCost && openList[i]->hCost < currentNode->hCost)) {
+        currentNode = openList[i];
+        currentIdx = i;
+      }
+    }
+
+    openList[currentIdx] = openList[--openListSize];
+    closedList[currentNode->x][currentNode->y] = true;
+
+    if (currentNode->x == goal.x && currentNode->y == goal.y) {
+      Serial.println("Path found!");
+      Node* pathNode = currentNode;
+      while (pathNode != nullptr) {
+        Serial.print("Path: (");
+        Serial.print(pathNode->x);
+        Serial.print(", ");
+        Serial.print(pathNode->y);
+        Serial.println(")");
+        pathNode = pathNode->parent;
+      }
+      return; // Path found
+    }
+
+    Node neighbors[4] = {
+      {currentNode->x + 1, currentNode->y},
+      {currentNode->x - 1, currentNode->y},
+      {currentNode->x, currentNode->y + 1},
+      {currentNode->x, currentNode->y - 1}
+    };
+
+    for (int i = 0; i < 4; i++) {
+      Node* neighbor = &neighbors[i];
+
+      if (neighbor->x >= 0 && neighbor->x < GRID_SIZE && neighbor->y >= 0 && neighbor->y < GRID_SIZE) {
+        if (occupancyGrid[neighbor->x][neighbor->y] == 0 && !closedList[neighbor->x][neighbor->y]) {
+
+          int newGCost = currentNode->gCost + 1;
+          bool inOpenList = false;
+          for (int j = 0; j < openListSize; j++) {
+            if (openList[j]->x == neighbor->x && openList[j]->y == neighbor->y) {
+              inOpenList = true;
+              if (newGCost < neighbor->gCost) {
+                neighbor->gCost = newGCost;
+                neighbor->fCost = neighbor->gCost + calculateHCost(neighbor, &goal);
+                neighbor->parent = currentNode;
+              }
+              break;
+            }
+          }
+
+          if (!inOpenList) {
+            neighbor->gCost = newGCost;
+            neighbor->hCost = calculateHCost(neighbor, &goal);
+            neighbor->fCost = neighbor->gCost + neighbor->hCost;
+            neighbor->parent = currentNode;
+            openList[openListSize++] = neighbor;
+          }
+        } else {
+          Serial.print("Blocked or Closed: (");
+          Serial.print(neighbor->x);
+          Serial.print(", ");
+          Serial.println(neighbor->y);
+        }
+      }
+    }
+  }
+
+  Serial.println("Path not found");
+}
+
+void moveRobotAlongPath(Node* path) {
+  while (path != nullptr) {
+    // Implement the logic to move the robot using your motor functions
+    path = path->parent; 
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  initializeOccupancyGrid();
+  
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1);
+  }
+  mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
+  mpu.setGyroRange(MPU6050_RANGE_250_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  ultrasonicServo.attach(ULTRASONIC_SERVO_PIN);
+  pendulumServo.attach(PENDULUM_SERVO_PIN);
+
+  Serial.println("Setup complete!");
+}
+
+void loop() {
+  int x = 50;  
+  int y = 50;
+
+  for (int pos = 0; pos <= 180; pos += 30) {
+    ultrasonicServo.write(pos);
+    delay(500);
+    
+    unsigned int distance = sonar.ping_cm();
+    Serial.print("Distance at ");
+    Serial.print(pos);
+    Serial.print(" degrees: ");
+    Serial.println(distance);
+
+    updateOccupancyGrid(x, y, distance);
+  }
+
+  Serial.println("Occupancy Grid:");
+  for (int i = 0; i < GRID_SIZE; i++) {
+    for (int j = 0; j < GRID_SIZE; j++) {
+      Serial.print(occupancyGrid[i][j]);
+      Serial.print(" ");
+    }
+    Serial.println();
+  }
+
+  Node start = {0, 0};
+  Node goal = {9, 9};
+  aStar(start, goal);
+
+  pendulumServo.write(90); 
+  delay(1000);              
+  pendulumServo.write(0);   
+  delay(1000);              
+  pendulumServo.write(180); 
+  delay(1000);              
+
+  delay(1000);
+}
+
