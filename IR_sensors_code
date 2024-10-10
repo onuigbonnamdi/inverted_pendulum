@@ -1,0 +1,26 @@
+void setup() {
+  pinMode(2, INPUT);
+  pinMode(4, INPUT);
+  pinMode(6, INPUT);
+  pinMode(8, INPUT);
+  pinMode(10, INPUT);
+
+  Serial.begin(9600);
+}
+
+void loop() {
+  Serial.print("Sensor 1: ");
+  Serial.print(digitalRead(2));
+  Serial.print("\tSensor 2: ");
+  Serial.print(digitalRead(4));
+  Serial.print("\tSensor 3: ");
+  Serial.print(digitalRead(6));
+  Serial.print("\tSensor 4: ");
+  Serial.print(digitalRead(8));
+  Serial.print("\tSensor 5: ");
+  Serial.println(digitalRead(10));
+
+  delay(500);
+}
+
+ 
