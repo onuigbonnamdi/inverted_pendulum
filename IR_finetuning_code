@@ -1,0 +1,34 @@
+#define IR_SENSOR1_PIN 2
+#define IR_SENSOR2_PIN 4
+#define IR_SENSOR3_PIN 6
+#define IR_SENSOR4_PIN 8
+#define IR_SENSOR5_PIN 10
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(IR_SENSOR1_PIN, INPUT);
+  pinMode(IR_SENSOR2_PIN, INPUT);
+  pinMode(IR_SENSOR3_PIN, INPUT);
+  pinMode(IR_SENSOR4_PIN, INPUT);
+  pinMode(IR_SENSOR5_PIN, INPUT);
+}
+
+void loop() {
+  int sensor1Value = digitalRead(IR_SENSOR1_PIN);
+  int sensor2Value = digitalRead(IR_SENSOR2_PIN);
+  int sensor3Value = digitalRead(IR_SENSOR3_PIN);
+  int sensor4Value = digitalRead(IR_SENSOR4_PIN);
+  int sensor5Value = digitalRead(IR_SENSOR5_PIN);
+
+  Serial.print("IR Sensor Values: ");
+  Serial.print(sensor1Value); Serial.print(" ");
+  Serial.print(sensor2Value); Serial.print(" ");
+  Serial.print(sensor3Value); Serial.print(" ");
+  Serial.print(sensor4Value); Serial.print(" ");
+  Serial.println(sensor5Value);
+
+  // Implement behavior based on IR readings
+  delay(500);
+}
+
+ 
