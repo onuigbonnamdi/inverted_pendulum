@@ -1,0 +1,45 @@
+void setup() {
+  // Set up motor pins as outputs
+  pinMode(46, OUTPUT);  // AIN1
+  pinMode(47, OUTPUT);  // AIN2
+  pinMode(50, OUTPUT);  // BIN1
+  pinMode(49, OUTPUT);  // BIN2
+  pinMode(48, OUTPUT);  // SLP
+
+  // Enable the motor driver by setting SLP high
+  digitalWrite(48, HIGH);
+
+  // Move forward
+  digitalWrite(46, HIGH);  // Motor A forward
+  digitalWrite(47, LOW);
+  digitalWrite(50, HIGH);  // Motor B forward
+  digitalWrite(49, LOW);
+  
+  // Run the motors for 2 seconds
+  delay(2000);
+
+  // Stop the motors
+  digitalWrite(46, LOW);
+  digitalWrite(47, LOW);
+  digitalWrite(50, LOW);
+  digitalWrite(49, LOW);
+
+  // Move backward
+  digitalWrite(46, LOW);  // Motor A backward
+  digitalWrite(47, HIGH);
+  digitalWrite(50, LOW);  // Motor B backward
+  digitalWrite(49, HIGH);
+  
+  // Run the motors for 2 seconds
+  delay(2000);
+
+  // Stop the motors
+  digitalWrite(46, LOW);
+  digitalWrite(47, LOW);
+  digitalWrite(50, LOW);
+  digitalWrite(49, LOW);
+}
+
+void loop() {
+  // Nothing to do here
+}
