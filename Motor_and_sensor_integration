@@ -1,0 +1,94 @@
+// Define motor control pins
+const int motorAin1 = 46;
+const int motorAin2 = 47;
+const int motorBin1 = 50;
+const int motorBin2 = 49;
+const int motorSLP = 48;
+
+// Define IR sensor pins
+const int IR_SENSOR1_PIN = 2;  // Forward right
+const int IR_SENSOR2_PIN = 4;  // Forward left
+const int IR_SENSOR3_PIN = 6;  // Downward middle
+const int IR_SENSOR4_PIN = 8;  // Downward left
+const int IR_SENSOR5_PIN = 10; // Downward right
+
+// Thresholds for detecting lines
+const int WHITE_THRESHOLD = 550;
+const int BLACK_THRESHOLD = 450;
+
+void setup() {
+  // Set up motor pins as outputs
+  pinMode(motorAin1, OUTPUT);
+  pinMode(motorAin2, OUTPUT);
+  pinMode(motorBin1, OUTPUT);
+  pinMode(motorBin2, OUTPUT);
+  pinMode(motorSLP, OUTPUT);
+
+  // Enable the motor driver by setting SLP high
+  digitalWrite(motorSLP, HIGH);
+
+  // Initialize Serial communication
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Read the IR sensor values
+  int sensor1Value = analogRead(IR_SENSOR1_PIN);
+  int sensor2Value = analogRead(IR_SENSOR2_PIN);
+  int sensor3Value = analogRead(IR_SENSOR3_PIN);
+  int sensor4Value = analogRead(IR_SENSOR4_PIN);
+  int sensor5Value = analogRead(IR_SENSOR5_PIN);
+
+  // Print sensor values to monitor
+  Serial.print("Sensor 1: "); Serial.print(sensor1Value);
+  Serial.print(" | Sensor 2: "); Serial.print(sensor2Value);
+  Serial.print(" | Sensor 3: "); Serial.print(sensor3Value);
+  Serial.print(" | Sensor 4: "); Serial.print(sensor4Value);
+  Serial.print(" | Sensor 5: "); Serial.println(sensor5Value);
+
+  // Determine actions based on sensor readings
+  if (sensor1Value < BLACK_THRESHOLD && sensor2Value < BLACK_THRESHOLD) {
+    // Move forward
+    moveForward();
+  } else if (sensor1Value < BLACK_THRESHOLD && sensor2Value > WHITE_THRESHOLD) {
+    // Turn slightly right
+    turnRight();
+  } else if (sensor1Value > WHITE_THRESHOLD && sensor2Value < BLACK_THRESHOLD) {
+    // Turn slightly left
+    turnLeft();
+  } else {
+    // Stop motors if no line is detected
+    stopMotors();
+  }
+
+  // Delay to avoid reading too frequently
+  delay(100);
+}
+
+void moveForward() {
+  digitalWrite(motorAin1, HIGH);  // Motor A forward
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, HIGH);  // Motor B forward
+  digitalWrite(motorBin2, LOW);
+}
+
+void turnRight() {
+  digitalWrite(motorAin1, HIGH);  // Motor A forward
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, LOW);   // Motor B stop
+  digitalWrite(motorBin2, LOW);
+}
+
+void turnLeft() {
+  digitalWrite(motorAin1, LOW);   // Motor A stop
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, HIGH);  // Motor B forward
+  digitalWrite(motorBin2, LOW);
+}
+
+void stopMotors() {
+  digitalWrite(motorAin1, LOW);
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, LOW);
+  digitalWrite(motorBin2, LOW);
+}
