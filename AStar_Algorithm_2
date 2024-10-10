@@ -1,0 +1,187 @@
+#include <Servo.h>
+#include <NewPing.h>
+
+// Definitions and Declarations
+#define GRID_SIZE 5  // Simplified grid size (5x5)
+int occupancyGrid[GRID_SIZE][GRID_SIZE];  // Occupancy grid
+
+// Define the structure for a Node
+struct Node {
+  int x, y;
+  int gCost, hCost, fCost;
+  Node* parent;
+};
+
+// Servo and sensor objects
+Servo ultrasonicServo;
+Servo pendulumServo;
+NewPing sonar(24, 25, 200); // Trig pin, Echo pin, Max distance
+
+// Motor pins
+const int motorAin1 = 46;
+const int motorAin2 = 47;
+const int motorBin1 = 50;
+const int motorBin2 = 49;
+const int motorSLP  = 48;
+
+// Function Prototypes
+void initializeOccupancyGrid();
+void updateOccupancyGrid(int x, int y, unsigned int distance);
+int calculateHCost(Node* start, Node* goal);
+void aStar(Node start, Node goal);
+void moveRobotAlongPath(Node* path);
+void moveForward();
+void turnRight();
+void turnLeft();
+void stopMotors();
+
+// Setup function
+void setup() {
+  Serial.begin(9600);
+
+  // Initialize occupancy grid
+  initializeOccupancyGrid();
+
+  // Initialize servos
+  ultrasonicServo.attach(13);
+  pendulumServo.attach(12);
+
+  // Initialize motor pins
+  pinMode(motorAin1, OUTPUT);
+  pinMode(motorAin2, OUTPUT);
+  pinMode(motorBin1, OUTPUT);
+  pinMode(motorBin2, OUTPUT);
+  pinMode(motorSLP, OUTPUT);
+
+  // Enable motor driver
+  digitalWrite(motorSLP, HIGH);
+
+  // Test the motors
+  moveForward();
+  delay(2000);
+  stopMotors();
+  delay(1000);
+}
+
+// Loop function
+void loop() {
+  int x = 50;  
+  int y = 50;
+
+  // Sweep the servo and update occupancy grid
+  for (int pos = 0; pos <= 180; pos += 90) {  // Reduced to 90-degree increments
+    ultrasonicServo.write(pos);
+    delay(500);
+    
+    unsigned int distance = sonar.ping_cm();
+    Serial.print("Distance at ");
+    Serial.print(pos);
+    Serial.print(" degrees: ");
+    Serial.println(distance);
+
+    updateOccupancyGrid(x, y, distance);
+  }
+
+  Serial.println("Occupancy Grid:");
+  for (int i = 0; i < GRID_SIZE; i++) {
+    for (int j = 0; j < GRID_SIZE; j++) {
+      Serial.print(occupancyGrid[i][j]);
+      Serial.print(" ");
+    }
+    Serial.println();
+  }
+
+  Node start = {0, 0};
+  Node goal = {4, 4};
+  aStar(start, goal);
+
+  pendulumServo.write(90); 
+  delay(1000);              
+  pendulumServo.write(0);   
+  delay(1000);              
+  pendulumServo.write(180); 
+  delay(1000);              
+
+  delay(1000);
+}
+
+// Function Implementations
+
+void initializeOccupancyGrid() {
+  for (int i = 0; i < GRID_SIZE; i++) {
+    for (int j = 0; j < GRID_SIZE; j++) {
+      occupancyGrid[i][j] = 0; // Set all cells to free
+    }
+  }
+}
+
+void updateOccupancyGrid(int x, int y, unsigned int distance) {
+  int gridX = x / (200 / GRID_SIZE);  // Assume 200 cm as max range
+  int gridY = y / (200 / GRID_SIZE);
+
+  // Mark the corresponding cell in the grid as occupied if within range
+  if (gridX < GRID_SIZE && gridY < GRID_SIZE && distance > 0 && distance < 200) {
+    occupancyGrid[gridX][gridY] = 1;
+  }
+}
+
+int calculateHCost(Node* start, Node* goal) {
+  return abs(start->x - goal->x) + abs(start->y - goal->y);
+}
+
+void aStar(Node start, Node goal) {
+  // Simple A* implementation (placeholder)
+  // Assuming the path is straight for simplicity
+  Node* current = &start;
+
+  while (current->x != goal.x || current->y != goal.y) {
+    if (current->x < goal.x) {
+      moveForward();
+      current->x++;
+    } else if (current->y < goal.y) {
+      turnRight();
+      moveForward();
+      current->y++;
+    }
+    delay(1000); // Simulate time taken to move
+  }
+
+  stopMotors();
+}
+
+void moveForward() {
+  Serial.println("Moving Forward");
+  digitalWrite(motorAin1, HIGH);  
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, HIGH);  
+  digitalWrite(motorBin2, LOW);
+}
+
+void turnRight() {
+  Serial.println("Turning Right");
+  digitalWrite(motorAin1, HIGH);  
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, LOW);  
+  digitalWrite(motorBin2, HIGH);
+  delay(500);
+  stopMotors();
+}
+
+void turnLeft() {
+  Serial.println("Turning Left");
+  digitalWrite(motorAin1, LOW);  
+  digitalWrite(motorAin2, HIGH);
+  digitalWrite(motorBin1, HIGH);  
+  digitalWrite(motorBin2, LOW);
+  delay(500);
+  stopMotors();
+}
+
+void stopMotors() {
+  Serial.println("Stopping Motors");
+  digitalWrite(motorAin1, LOW);
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, LOW);
+  digitalWrite(motorBin2, LOW);
+}
+
