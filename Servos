@@ -1,0 +1,28 @@
+#include <Servo.h>
+
+Servo frontServo;
+void setup() {
+  frontServo.attach(13);  // Attach the servo to pin 13
+}
+void loop() {
+  // Move front servo to the center (90 degrees)
+  frontServo.write(90);   
+  delay(1000);            // Hold for 1 second
+
+  // Move front servo to the left (60 degrees)
+  frontServo.write(60);   
+  delay(1000);            // Hold for 1 second
+
+  // Return to center
+  frontServo.write(90);   
+  delay(100);            // Hold for 1 second
+
+  // Move front servo to the right (120 degrees)
+  frontServo.write(120);  
+  delay(100);            // Hold for 1 second
+
+  // Return to center
+  frontServo.write(90);   
+  delay(100);            // Hold for 1 second
+}
+
