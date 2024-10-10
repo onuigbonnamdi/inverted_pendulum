@@ -1,0 +1,241 @@
+#include <Wire.h>
+#include <MPU6050.h>
+
+// MPU6050 IMU setup
+MPU6050 mpu;
+
+// Ultrasonic Sensor Pins
+const int trigPin = 9;  // Trig pin for the ultrasonic sensor
+const int echoPin = 7;  // Echo pin for the ultrasonic sensor
+
+// Motor Control Pins
+const int motorAin1 = 46;
+const int motorAin2 = 47;
+const int motorBin1 = 50;
+const int motorBin2 = 49;
+const int motorSLP  = 48;
+const int motorFLT  = 51; // Optional: Use this if you want to monitor faults
+
+// Define the size of the grid
+const int gridRows = 5;
+const int gridCols = 5;
+
+// Define the grid (0 = free space, 1 = obstacle)
+int grid[gridRows][gridCols] = {
+  {0, 0, 0, 0, 0},
+  {0, 1, 1, 1, 0},
+  {0, 0, 0, 1, 0},
+  {0, 1, 0, 0, 0},
+  {0, 0, 0, 1, 0}
+};
+
+// Define the start and goal positions
+int startX = 0, startY = 0;
+int goalX = 4, goalY = 4;
+
+// Define the structure for a node in the grid
+struct Node {
+  int x, y;
+  int gCost, hCost, fCost;
+  Node* parent;
+};
+
+Node* openList[gridRows * gridCols];
+int openListSize = 0;
+
+Node* closedList[gridRows * gridCols];
+int closedListSize = 0;
+
+// Function to calculate the Manhattan distance (h-cost)
+int calculateHCost(int x, int y, int goalX, int goalY) {
+  return abs(x - goalX) + abs(y - goalY);
+}
+
+// Function to find the node with the lowest f-cost
+Node* getLowestFCostNode() {
+  Node* lowest = openList[0];
+  for (int i = 1; i < openListSize; i++) {
+    if (openList[i]->fCost < lowest->fCost) {
+      lowest = openList[i];
+    }
+  }
+  return lowest;
+}
+
+// Function to remove a node from the open list
+void removeFromOpenList(Node* node) {
+  for (int i = 0; i < openListSize; i++) {
+    if (openList[i] == node) {
+      for (int j = i; j < openListSize - 1; j++) {
+        openList[j] = openList[j + 1];
+      }
+      openListSize--;
+      return;
+    }
+  }
+}
+
+// Function to check if a node is in the closed list
+bool isInClosedList(Node* node) {
+  for (int i = 0; i < closedListSize; i++) {
+    if (closedList[i]->x == node->x && closedList[i]->y == node->y) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Function to add a node to the open list
+void addToOpenList(Node* node) {
+  openList[openListSize++] = node;
+}
+
+// Function to add a node to the closed list
+void addToClosedList(Node* node) {
+  closedList[closedListSize++] = node;
+}
+
+// Function to find the path using A* algorithm
+Node* findPath() {
+  Node* startNode = new Node{startX, startY, 0, 0, 0, nullptr};
+  Node* goalNode = new Node{goalX, goalY, 0, 0, 0, nullptr};
+
+  addToOpenList(startNode);
+
+  while (openListSize > 0) {
+    Node* currentNode = getLowestFCostNode();
+    removeFromOpenList(currentNode);
+    addToClosedList(currentNode);
+
+    if (currentNode->x == goalX && currentNode->y == goalY) {
+      return currentNode; // Path found, return the goal node to backtrack the path
+    }
+
+    // Explore neighbors
+    int dx[] = {-1, 1, 0, 0};
+    int dy[] = {0, 0, -1, 1};
+    for (int i = 0; i < 4; i++) {
+      int newX = currentNode->x + dx[i];
+      int newY = currentNode->y + dy[i];
+
+      if (newX >= 0 && newX < gridRows && newY >= 0 && newY < gridCols && grid[newX][newY] == 0) {
+        Node* neighbor = new Node{newX, newY, 0, 0, 0, currentNode};
+        if (isInClosedList(neighbor)) {
+          delete neighbor; // Clean up memory
+          continue;
+        }
+
+        int tentativeGCost = currentNode->gCost + 1;
+        if (tentativeGCost < neighbor->gCost || neighbor->gCost == 0) {
+          neighbor->gCost = tentativeGCost;
+          neighbor->hCost = calculateHCost(newX, newY, goalX, goalY);
+          neighbor->fCost = neighbor->gCost + neighbor->hCost;
+          neighbor->parent = currentNode;
+
+          addToOpenList(neighbor);
+        }
+      }
+    }
+  }
+
+  return nullptr; // No path found
+}
+
+// Function to move the robot along the calculated path
+void moveRobotAlongPath(Node* node) {
+  while (node->parent != nullptr) {
+    int deltaX = node->x - node->parent->x;
+    int deltaY = node->y - node->parent->y;
+
+    if (deltaX == 1) {
+      Serial.println("Moving Right");
+      moveRight();
+    } else if (deltaX == -1) {
+      Serial.println("Moving Left");
+      moveLeft();
+    } else if (deltaY == 1) {
+      Serial.println("Moving Forward");
+      moveForward();  // Downward movement is forward
+    } else if (deltaY == -1) {
+      Serial.println("Moving Backward");
+      moveBackward(); // Upward movement is backward
+    }
+
+    node = node->parent;
+  }
+}
+
+// Motor control functions
+void moveForward() {
+  digitalWrite(motorAin1, HIGH);
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, HIGH);
+  digitalWrite(motorBin2, LOW);
+  delay(2000);  // Adjust the time to control movement distance
+  stopMotors();
+}
+
+void moveBackward() {
+  digitalWrite(motorAin1, LOW);
+  digitalWrite(motorAin2, HIGH);
+  digitalWrite(motorBin1, LOW);
+  digitalWrite(motorBin2, HIGH);
+  delay(1000);  // Adjust the time to control movement distance
+  stopMotors();
+}
+
+void moveLeft() {
+  digitalWrite(motorAin1, LOW);
+  digitalWrite(motorAin2, HIGH);
+  digitalWrite(motorBin1, HIGH);
+  digitalWrite(motorBin2, LOW);
+  delay(1000);  // Adjust the time to control rotation angle
+  stopMotors();
+}
+
+void moveRight() {
+  digitalWrite(motorAin1, HIGH);
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, LOW);
+  digitalWrite(motorBin2, HIGH);
+  delay(1000);  // Adjust the time to control rotation angle
+  stopMotors();
+}
+
+void stopMotors() {
+  digitalWrite(motorAin1, LOW);
+  digitalWrite(motorAin2, LOW);
+  digitalWrite(motorBin1, LOW);
+  digitalWrite(motorBin2, LOW);
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  // Set up motor pins as outputs
+  pinMode(motorAin1, OUTPUT);
+  pinMode(motorAin2, OUTPUT);
+  pinMode(motorBin1, OUTPUT);
+  pinMode(motorBin2, OUTPUT);
+  pinMode(motorSLP, OUTPUT);
+  pinMode(motorFLT, INPUT);
+
+  // Enable the motor driver by setting SLP high
+  digitalWrite(motorSLP, HIGH);
+
+  // Find the path using A*
+  Node* goalNode = findPath();
+
+  if (goalNode != nullptr) {
+    Serial.println("Path found. Moving robot...");
+    moveRobotAlongPath(goalNode);  // Move robot along the path from start to goal
+  } else {
+    Serial.println("No path found.");
+  }
+}
+
+void loop() {
+  // The pathfinding result and movement will be handled in setup
+}
+
+
