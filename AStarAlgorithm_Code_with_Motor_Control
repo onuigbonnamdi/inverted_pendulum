@@ -1,0 +1,56 @@
+// A* Algorithm Code with Motor Control
+
+#include <Servo.h>
+
+// Motor Pins and Ultrasonic Servo
+const int motorAin1 = 46;
+const int motorAin2 = 47;
+const int motorBin1 = 50;
+const int motorBin2 = 49;
+const int motorSLP  = 48;
+Servo ultrasonicServo;
+Servo pendulumServo;
+
+// Sensor Pins
+const int trigPin = 24;
+const int echoPin = 25;
+
+// A* Algorithm-related definitions
+// Define your grid and other A* parameters here
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Initialize motor pins
+  pinMode(motorAin1, OUTPUT);
+  pinMode(motorAin2, OUTPUT);
+  pinMode(motorBin1, OUTPUT);
+  pinMode(motorBin2, OUTPUT);
+  pinMode(motorSLP, OUTPUT);
+  digitalWrite(motorSLP, HIGH);
+
+  // Initialize Ultrasonic servo
+  ultrasonicServo.attach(13);  // Attach servo to pin 13
+  pendulumServo.attach(12);    // Attach pendulum servo to pin 12
+
+  // Additional setup code for sensors, A* algorithm, etc.
+}
+
+void loop() {
+  // A* Pathfinding and SLAM Logic
+  // Move through the grid, detect obstacles, update path
+
+  // Example Servo Movement
+  ultrasonicServo.write(90);  // Set the servo to the mid position (90 degrees)
+  delay(1000);                // Wait for a second
+
+  ultrasonicServo.write(0);   // Set the servo to 0 degrees
+  delay(1000);                // Wait for a second
+
+  ultrasonicServo.write(180); // Set the servo to 180 degrees
+  delay(1000);                // Wait for a second
+
+  // Use IMU and Ultrasonic data to update the path or adjust the robot
+}
+
+
